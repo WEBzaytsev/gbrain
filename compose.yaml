@@ -1,0 +1,182 @@
+name: gbrain
+
+services:
+  gbrain-db:
+    image: pgvector/pgvector:pg16
+    container_name: gbrain-db
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: ${GBRAIN_POSTGRES_USER:-gbrain}
+      POSTGRES_PASSWORD: ${GBRAIN_POSTGRES_PASSWORD:-change-me-long-random-password}
+      POSTGRES_DB: ${GBRAIN_POSTGRES_DB:-gbrain}
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  gbrain-init:
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain-init
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      OPENAI_API_KEY: ${GBRAIN_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${GBRAIN_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${GBRAIN_ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${GBRAIN_VOYAGE_API_KEY:-}
+      ZEROENTROPY_API_KEY: ${GBRAIN_ZEROENTROPY_API_KEY:-}
+      GBRAIN_CHAT_MODEL: ${GBRAIN_CHAT_MODEL:-}
+      GBRAIN_EXPANSION_MODEL: ${GBRAIN_EXPANSION_MODEL:-}
+      GBRAIN_SCHEMA_PACK: ${GBRAIN_SCHEMA_PACK:-gbrain-base-v2}
+      GBRAIN_INIT_NO_EMBEDDING: ${GBRAIN_INIT_NO_EMBEDDING:-0}
+      GBRAIN_INIT_EMBEDDING_MODEL: ${GBRAIN_INIT_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      GBRAIN_INIT_EMBEDDING_DIMENSIONS: ${GBRAIN_INIT_EMBEDDING_DIMENSIONS:-}
+      GBRAIN_INIT_SKIP_EMBED_CHECK: ${GBRAIN_INIT_SKIP_EMBED_CHECK:-0}
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+    command: init
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+
+  gbrain:
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      OPENAI_API_KEY: ${GBRAIN_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${GBRAIN_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${GBRAIN_ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${GBRAIN_VOYAGE_API_KEY:-}
+      ZEROENTROPY_API_KEY: ${GBRAIN_ZEROENTROPY_API_KEY:-}
+      GBRAIN_CHAT_MODEL: ${GBRAIN_CHAT_MODEL:-}
+      GBRAIN_EXPANSION_MODEL: ${GBRAIN_EXPANSION_MODEL:-}
+      GBRAIN_PORT: ${GBRAIN_PORT:-3131}
+      GBRAIN_BIND: ${GBRAIN_BIND:-0.0.0.0}
+      GBRAIN_PUBLIC_URL: ${GBRAIN_PUBLIC_URL:-https://gbrain.example.com}
+      GBRAIN_ADMIN_BOOTSTRAP_TOKEN: ${GBRAIN_ADMIN_BOOTSTRAP_TOKEN:-replace-with-random-token-at-least-32-chars}
+      GBRAIN_HTTP_CORS_ORIGIN: ${GBRAIN_HTTP_CORS_ORIGIN:-}
+      GBRAIN_TOKEN_TTL: ${GBRAIN_TOKEN_TTL:-3600}
+      GBRAIN_REPO: ${GBRAIN_REPO:-/home/gbrain/brain}
+      GBRAIN_DURABILITY_SOURCE: ${GBRAIN_DURABILITY_SOURCE:-default}
+      GBRAIN_DURABILITY_BRANCH: ${GBRAIN_DURABILITY_BRANCH:-main}
+      GBRAIN_DURABILITY_INSTALL_CRON: ${GBRAIN_DURABILITY_INSTALL_CRON:-0}
+      GBRAIN_GITHUB_PAT: ${GBRAIN_GITHUB_PAT:-}
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${GBRAIN_PORT:-3131}:${GBRAIN_PORT:-3131}"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require("node:http").get({host:"127.0.0.1",port:process.env.GBRAIN_PORT||3131,path:"/health"},r=>process.exit(r.statusCode===200?0:1)).on("error",()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  gbrain-worker:
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain-worker
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      OPENAI_API_KEY: ${GBRAIN_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${GBRAIN_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${GBRAIN_ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${GBRAIN_VOYAGE_API_KEY:-}
+      ZEROENTROPY_API_KEY: ${GBRAIN_ZEROENTROPY_API_KEY:-}
+      GBRAIN_CHAT_MODEL: ${GBRAIN_CHAT_MODEL:-}
+      GBRAIN_EXPANSION_MODEL: ${GBRAIN_EXPANSION_MODEL:-}
+      GBRAIN_WORKER_QUEUE: ${GBRAIN_WORKER_QUEUE:-default}
+      GBRAIN_WORKER_CONCURRENCY: ${GBRAIN_WORKER_CONCURRENCY:-2}
+      GBRAIN_WORKER_MAX_RSS_MB: ${GBRAIN_WORKER_MAX_RSS_MB:-0}
+    command: worker
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  gbrain-autopilot:
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain-autopilot
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      OPENAI_API_KEY: ${GBRAIN_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${GBRAIN_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${GBRAIN_ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${GBRAIN_VOYAGE_API_KEY:-}
+      ZEROENTROPY_API_KEY: ${GBRAIN_ZEROENTROPY_API_KEY:-}
+      GBRAIN_CHAT_MODEL: ${GBRAIN_CHAT_MODEL:-}
+      GBRAIN_EXPANSION_MODEL: ${GBRAIN_EXPANSION_MODEL:-}
+      GBRAIN_REPO: ${GBRAIN_REPO:-/home/gbrain/brain}
+      GBRAIN_AUTOPILOT_INTERVAL: ${GBRAIN_AUTOPILOT_INTERVAL:-300}
+    command: autopilot
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  gbrain-federation:
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain-federation
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      OPENAI_API_KEY: ${GBRAIN_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${GBRAIN_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${GBRAIN_ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${GBRAIN_VOYAGE_API_KEY:-}
+      ZEROENTROPY_API_KEY: ${GBRAIN_ZEROENTROPY_API_KEY:-}
+      GBRAIN_CHAT_MODEL: ${GBRAIN_CHAT_MODEL:-}
+      GBRAIN_EXPANSION_MODEL: ${GBRAIN_EXPANSION_MODEL:-}
+      GBRAIN_FEDERATION_INTERVAL: ${GBRAIN_FEDERATION_INTERVAL:-60}
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    command: federation
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true

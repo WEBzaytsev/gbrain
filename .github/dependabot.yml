@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-build-tooling:
+        patterns:
+          - oven/bun
+      docker-node-lts:
+        patterns:
+          - node
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+    ignore:
+      - dependency-name: node
+        versions:
+          - '>=23'
+    open-pull-requests-limit: 3
