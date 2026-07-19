@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROLE="${GBRAIN_ROLE:?GBRAIN_ROLE must be set: serve|worker|autopilot}"
-
 prepare_bind_mounts() {
-  mkdir -p /home/gbrain/.gbrain /data/brain
-  chown -R gbrain:gbrain /home/gbrain/.gbrain /data/brain
+  mkdir -p /home/gbrain/.gbrain /home/gbrain/brain
+  chown -R gbrain:gbrain /home/gbrain
 }
 
 as_gbrain() {
@@ -20,38 +18,53 @@ wait_for_postgres() {
   echo "[entrypoint] postgres ready"
 }
 
+mode="${1:-serve}"
+shift || true
+
 wait_for_postgres
 prepare_bind_mounts
 
-case "$ROLE" in
+case "$mode" in
+  init)
+    cmd=(/usr/local/bin/init.sh "$@")
+    ;;
   serve)
-    as_gbrain gbrain serve --http \
-      --port "${GBRAIN_PORT:-3131}" \
-      --bind "${GBRAIN_BIND:-0.0.0.0}" \
-      --public-url "${GBRAIN_PUBLIC_URL:?GBRAIN_PUBLIC_URL must be set}" \
-      --token-ttl "${GBRAIN_TOKEN_TTL:-3600}" \
-      --enable-dcr \
+    cmd=(
+      gbrain serve --http
+      --port "${GBRAIN_PORT:-3131}"
+      --bind "${GBRAIN_BIND:-0.0.0.0}"
+      --public-url "${GBRAIN_PUBLIC_URL:?GBRAIN_PUBLIC_URL must be set}"
+      --token-ttl "${GBRAIN_TOKEN_TTL:-3600}"
+      --enable-dcr
       --suppress-bootstrap-token
+      "$@"
+    )
     ;;
   worker)
-    args=(jobs work --queue "${GBRAIN_WORKER_QUEUE:-default}")
-    if [[ -n "${GBRAIN_WORKER_CONCURRENCY:-}" ]]; then
-      args+=(--concurrency "${GBRAIN_WORKER_CONCURRENCY}")
-    fi
-    if [[ -n "${GBRAIN_WORKER_MAX_RSS_MB:-}" ]]; then
-      args+=(--max-rss "${GBRAIN_WORKER_MAX_RSS_MB}")
-    fi
-    as_gbrain gbrain "${args[@]}"
+    cmd=(
+      gbrain jobs work
+      --queue "${GBRAIN_WORKER_QUEUE:-default}"
+      --concurrency "${GBRAIN_WORKER_CONCURRENCY:-2}"
+      --max-rss "${GBRAIN_WORKER_MAX_RSS_MB:-0}"
+      "$@"
+    )
     ;;
   autopilot)
-    rm -f "${HOME}/.gbrain/autopilot.lock" 2>/dev/null || true
-    as_gbrain gbrain autopilot \
-      --repo "${GBRAIN_REPO:-/data/brain}" \
-      --no-worker \
+    rm -f /home/gbrain/.gbrain/autopilot.lock 2>/dev/null || true
+    cmd=(
+      gbrain autopilot
+      --repo "${GBRAIN_REPO:-/home/gbrain/brain}"
+      --no-worker
       --interval "${GBRAIN_AUTOPILOT_INTERVAL:-300}"
+      "$@"
+    )
+    ;;
+  federation)
+    cmd=(/usr/local/bin/grant-federation.sh "$@")
     ;;
   *)
-    echo "[entrypoint] unknown GBRAIN_ROLE: $ROLE" >&2
-    exit 1
+    cmd=("$mode" "$@")
     ;;
 esac
+
+as_gbrain "${cmd[@]}"

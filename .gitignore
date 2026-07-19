@@ -2,12 +2,11 @@
 .env.*
 !.env.example
 
-brain-repo/*
-!brain-repo/.gitkeep
-
 data/
+postgres/
 backups/
 *.sql
+!scripts/db-init.sql
 *.dump
 *.tgz
 *.tar

@@ -1,0 +1,52 @@
+when:
+  - event: push
+    branch: [main, master]
+    path:
+      include:
+        - Dockerfile
+        - compose.yaml
+        - scripts/**
+        - .dockerignore
+        - README.md
+        - .woodpecker/gbrain.yml
+  - event: manual
+    branch: [main, master]
+
+steps:
+  build:
+    image: woodpeckerci/plugin-docker-buildx
+    privileged: true
+    settings:
+      registry: hub.zaitsv.dev
+      repo: hub.zaitsv.dev/gbrain
+      dockerfile: Dockerfile
+      context: .
+      platforms: linux/amd64
+      cache_from:
+        - 'type=registry\,ref=hub.zaitsv.dev/gbrain:buildcache'
+      cache_to: "type=registry,ref=hub.zaitsv.dev/gbrain:buildcache,mode=max"
+      username:
+        from_secret: hubregusername
+      password:
+        from_secret: hubregpass
+      mirror: https://mirror.gcr.io
+      custom_dns: [1.1.1.1, 8.8.8.8]
+      auto_tag: false
+      tags:
+        - latest
+      build_args:
+        GBRAIN_REF: eefe8b5741c27e59bf65198d46e3dfe5bfa70ce9
+        GIT_COMMIT_SHA: ${CI_COMMIT_SHA}
+        BUILDKIT_INLINE_CACHE: "1"
+      labels:
+        - org.opencontainers.image.title=GBrain
+        - org.opencontainers.image.vendor=WebZaytsev
+        - org.opencontainers.image.source=${CI_REPO_LINK}
+        - org.opencontainers.image.revision=${CI_COMMIT_SHA}
+        - org.opencontainers.image.created=${CI_COMMIT_TIMESTAMP}
+    when:
+      - event: [push, tag, manual]
+        branch: [main, master]
+      - event: [push]
+        branch:
+          exclude: [main, master]

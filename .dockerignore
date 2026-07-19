@@ -2,8 +2,8 @@
 .env
 .env.*
 !.env.example
-brain-repo
 data
+postgres
 backups
 *.sql
 *.dump

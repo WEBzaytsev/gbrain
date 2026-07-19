@@ -1,101 +1,253 @@
-# WEBzaytsev GBrain Docker Compose
+# WEBzaytsev/gbrain
 
-Private Docker Compose scaffold for running [garrytan/gbrain](https://github.com/garrytan/gbrain) as a Postgres-backed HTTP MCP service.
+Runtime wrapper for running GBrain from the published image:
 
-This repository intentionally **does not publish or deploy a Docker image**. The image is built locally from the pinned `GBRAIN_REF` when `docker compose build` runs.
+```yaml
+image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+```
 
-Runtime state uses local bind mounts, not anonymous/named Compose volumes:
+This repository is a deployment scaffold. Image build details live in `Dockerfile` and Woodpecker; `compose.yaml` is for runtime only.
 
-| Host path | Container path | Purpose |
+## What this stack runs
+
+| Service | Purpose | Runtime mode |
 |---|---|---|
-| `./data/postgres` | `/var/lib/postgresql/data` | Postgres/pgvector data |
-| `./data/gbrain-home` | `/home/gbrain/.gbrain` | GBrain config/cache/state |
-| `./brain-repo` | `/data/brain` | Markdown source directories |
+| `gbrain-db` | PostgreSQL + pgvector | `pgvector/pgvector:pg16` |
+| `gbrain-init` | Initializes GBrain database/config/source state | `command: init` |
+| `gbrain` | Main HTTP/MCP server | default image entrypoint, no Compose `command` |
+| `gbrain-worker` | Background Minions/job worker | `command: worker` |
+| `gbrain-autopilot` | Periodic source sync / autopilot loop | `command: autopilot` |
+| `gbrain-federation` | Periodic federation grant maintenance | `command: federation` |
 
-The GBrain image also declares `VOLUME ["/home/gbrain/.gbrain", "/data/brain"]` so the durable directories are explicit at image level as well as in Compose.
+`gbrain-federation` is a normal Compose service. If a deployment does not need it, remove that service from `compose.yaml` rather than hiding it behind a Compose profile.
 
-## Shape
+## Runtime layout
 
-| Service | Role | Expected steady state |
+Host paths:
+
+| Host path | Container path | Owner |
 |---|---|---|
-| `gbrain-db` | Postgres 16 + pgvector | running / healthy |
-| `gbrain-init` | one-shot DB/config/source bootstrap | `Exited(0)` after success |
-| `gbrain-serve` | HTTP MCP server: `/mcp`, `/admin`, `/health` | running / healthy |
-| `gbrain-worker` | durable background jobs worker | running |
-| `gbrain-autopilot` | periodic sync/enrichment dispatcher | running |
-| `gbrain-federation` | optional grant-all-sources-to-all-OAuth-clients loop | disabled by default (`federation` profile) |
+| `./data` | `/home/gbrain` | GBrain app state, config, local brain repo |
+| `./postgres` | `/var/lib/postgresql/data` | PostgreSQL data |
 
-## Quick start
+Inside the GBrain container:
+
+```text
+HOME=/home/gbrain
+/home/gbrain/.gbrain
+/home/gbrain/brain
+```
+
+PostgreSQL has an explicit shared-memory setting:
+
+```yaml
+shm_size: 1g
+```
+
+`scripts/db-init.sql` is tracked as a support/reference SQL file. It is not mounted into `/docker-entrypoint-initdb.d`; app-level setup is handled by `gbrain-init`.
+
+## Prerequisites
+
+- Docker with the Compose plugin.
+- Access to `hub.zaitsv.dev/gbrain`.
+- A real ignored `.env` file based on `.env.example`.
+- API keys for the providers you actually use.
+
+The real `.env` must stay untracked. Do not commit secrets.
+
+## Configure
+
+Create a local env file:
 
 ```bash
 cp .env.example .env
 chmod 600 .env
-# edit .env: set real GBRAIN_POSTGRES_PASSWORD, GBRAIN_DATABASE_URL, GBRAIN_PUBLIC_URL,
-# GBRAIN_ADMIN_BOOTSTRAP_TOKEN, and provider keys.
+```
 
+Edit `.env` and replace placeholder values:
+
+```env
+GBRAIN_POSTGRES_PASSWORD=replace-with-long-random-password
+GBRAIN_DATABASE_URL=postgresql://gbrain:replace-with-long-random-password@gbrain-db:5432/gbrain
+GBRAIN_PUBLIC_URL=https://gbrain.example.com
+GBRAIN_HTTP_CORS_ORIGIN=https://gbrain.example.com
+GBRAIN_ADMIN_BOOTSTRAP_TOKEN=replace-with-random-token-at-least-32-chars
+```
+
+Provider keys are optional for structural smoke tests, but required for a useful embedding/LLM-enabled brain:
+
+```env
+OPENAI_API_KEY=
+OPENAI_BASE_URL=
+GBRAIN_CHAT_MODEL=
+GBRAIN_EXPANSION_MODEL=
+ANTHROPIC_API_KEY=
+VOYAGE_API_KEY=
+ZEROENTROPY_API_KEY=
+```
+
+## Custom OpenAI-compatible endpoint
+
+For an OpenAI-compatible endpoint, set the endpoint URL, token, and GBrain model ids in `.env`.
+
+Example for `https://tokenly.plus/api/v1`:
+
+```env
+OPENAI_API_KEY=replace-with-tokenly-token
+OPENAI_BASE_URL=https://tokenly.plus/api/v1
+GBRAIN_CHAT_MODEL=openai:<chat-model-id-supported-by-tokenly>
+GBRAIN_EXPANSION_MODEL=openai:<small-chat-model-id-supported-by-tokenly>
+```
+
+The base URL must include the OpenAI-compatible `/v1` suffix when the provider serves routes there.
+
+If the same endpoint also supports embeddings and this is a fresh brain, configure init before the first `gbrain-init` run:
+
+```env
+GBRAIN_INIT_EMBEDDING_MODEL=openai/<embedding-model-id-supported-by-tokenly>
+```
+
+Do not set `GBRAIN_INIT_EMBEDDING_DIMENSIONS` for the normal OpenAI-style path. Set it only for a provider/model that explicitly requires a custom dimension.
+
+If the endpoint is chat-only, do not route embeddings to it. Keep embeddings on a provider that supports `/embeddings`, or run a structural smoke test with:
+
+```env
+GBRAIN_INIT_NO_EMBEDDING=1
+```
+
+After changing endpoint/model variables, recreate the services that need them:
+
+```bash
+docker compose --env-file .env up -d --force-recreate \
+  gbrain gbrain-worker gbrain-autopilot gbrain-federation
+```
+
+For a fresh brain where embedding init variables changed before first initialization, rerun the init service too:
+
+```bash
+docker compose --env-file .env up gbrain-init
+```
+
+For a no-spend structural initialization check, use:
+
+```env
+GBRAIN_INIT_NO_EMBEDDING=1
+```
+
+## Start
+
+Validate the rendered Compose config first:
+
+```bash
 docker compose --env-file .env config --quiet
-docker compose --env-file .env build
+```
+
+Pull images and start the stack:
+
+```bash
+docker compose --env-file .env pull
 docker compose --env-file .env up -d
 ```
 
-The entrypoints create/chown the GBrain bind mounts for the internal `gbrain` user. The Postgres image manages permissions for `./data/postgres`.
-
-Verify:
+Check service state:
 
 ```bash
 docker compose --env-file .env ps
-curl -fsS "$GBRAIN_PUBLIC_URL/health"
-docker compose --env-file .env exec gbrain-serve gbrain doctor
 ```
 
-`gbrain-init` is a one-shot container. A healthy deployed stack should normally show it as `Exited (0)`.
-
-## Federation is off by default
-
-`gbrain-federation` periodically updates every OAuth client so it can read every source. That is useful only for a fully shared team brain. It disables per-client source separation, so this repo keeps it behind an explicit profile:
+Check the HTTP health endpoint:
 
 ```bash
-docker compose --env-file .env --profile federation up -d gbrain-federation
+curl -fsS "http://127.0.0.1:${GBRAIN_PORT:-3131}/health"
 ```
 
-Do not enable it for personal/multi-tenant deployments where clients should have different source access.
-
-## Local source directories
-
-Put local markdown sources under `brain-repo/<source-id>/`. During `gbrain-init`, every direct subdirectory is registered as a federated local path source.
-
-```text
-brain-repo/
-  docs/
-    README.md
-  meetings/
-    2026-07-19.md
-```
-
-For GitHub-backed sources that should auto-pull, register them through GBrain itself after the stack is up:
+Open the main service logs when needed:
 
 ```bash
-docker compose --env-file .env exec gbrain-serve \
-  gbrain sources add docs --url https://github.com/ORG/REPO.git --name Docs --federated
-
-docker compose --env-file .env exec gbrain-serve gbrain sync --source docs
+docker compose --env-file .env logs -f gbrain
 ```
 
-## No secrets in git
+## Common operations
 
-- Real `.env` files are ignored.
-- `brain-repo/`, `data/`, `backups/`, dumps, archives are ignored.
-- `.env.example` contains placeholders only.
+Run the init service again after changing init-related settings:
 
-## Updating GBrain
+```bash
+docker compose --env-file .env up gbrain-init
+```
 
-1. Check upstream ref:
-   ```bash
-   git ls-remote https://github.com/garrytan/gbrain.git refs/heads/master
-   ```
-2. Update `GBRAIN_REF` in `.env.example` and docs if desired.
-3. Rebuild locally:
-   ```bash
-   docker compose --env-file .env build --no-cache
-   ```
-4. Do not push a built image unless a separate registry/deploy task explicitly asks for it.
+Restart only the main server:
+
+```bash
+docker compose --env-file .env up -d --no-deps --force-recreate gbrain
+```
+
+Restart background services:
+
+```bash
+docker compose --env-file .env up -d --no-deps --force-recreate \
+  gbrain-worker gbrain-autopilot gbrain-federation
+```
+
+Inspect the rendered service contract:
+
+```bash
+docker compose --env-file .env config
+```
+
+Stop the stack without deleting data:
+
+```bash
+docker compose --env-file .env down
+```
+
+## Image build
+
+`compose.yaml` does not build images. Build configuration belongs to:
+
+- `Dockerfile`
+- `.woodpecker/gbrain.yml`
+
+Every Dockerfile in this repo must start with an explicit BuildKit syntax directive:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+```
+
+The runtime Compose image stays literal:
+
+```yaml
+image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+```
+
+Only the tag is configurable through `IMAGE_TAG`.
+
+## Runtime contract checks
+
+Before pushing Compose/runtime changes, verify:
+
+```bash
+bash -n scripts/entrypoint.sh scripts/init.sh scripts/grant-federation.sh
+docker compose --env-file .env.example config --quiet
+docker compose --env-file .env.example config --format json >/tmp/gbrain-compose.json
+```
+
+The intended source shape:
+
+- main service is named `gbrain`;
+- `gbrain` has no Compose `command`;
+- `gbrain-init` uses `command: init`;
+- `gbrain-worker` uses `command: worker`;
+- `gbrain-autopilot` uses `command: autopilot`;
+- `gbrain-federation` uses `command: federation`;
+- no Compose `profiles` are used;
+- no Compose-level `entrypoint` is used;
+- no runtime `build:` or `context:` section is used;
+- no full-image override variable is used;
+- no role-switching environment variable is used;
+- no required-error interpolation is used for runtime environment variables;
+- runtime fallbacks use inline defaults like `${VAR:-value}` or optional-empty defaults like `${VAR:-}`;
+- app data is mounted as `./data:/home/gbrain`;
+- PostgreSQL data is mounted as `./postgres:/var/lib/postgresql/data`;
+- the main healthcheck uses `curl -fsS` against `/health`.
+
+Source scans should confirm that legacy service names, profile-gated federation, role-switching environment variables, full-image overrides, runtime build sections, host-path override comments, and required-error interpolation are absent from the current runtime contract.
