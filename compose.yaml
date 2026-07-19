@@ -1,0 +1,140 @@
+name: gbrain
+
+x-gbrain-build: &gbrain-build
+  context: .
+  args:
+    GBRAIN_REF: ${GBRAIN_REF:-eefe8b5741c27e59bf65198d46e3dfe5bfa70ce9}
+
+x-gbrain-env: &gbrain-env
+  DATABASE_URL: ${GBRAIN_DATABASE_URL:?set GBRAIN_DATABASE_URL in .env}
+  GBRAIN_HOME: /home/gbrain/.gbrain
+  GBRAIN_SKIP_STARTUP_HOOKS: "1"
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+  ZEROENTROPY_API_KEY: ${ZEROENTROPY_API_KEY:-}
+
+x-gbrain-service: &gbrain-service
+  image: ${GBRAIN_IMAGE:-webzaytsev-gbrain:local}
+  build: *gbrain-build
+  volumes:
+    - ./data/gbrain-home:/home/gbrain/.gbrain
+    - ./brain-repo:/data/brain
+  depends_on:
+    gbrain-db:
+      condition: service_healthy
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  gbrain-db:
+    image: pgvector/pgvector:pg16
+    container_name: gbrain-db
+    shm_size: ${POSTGRES_SHM_SIZE:-1g}
+    environment:
+      POSTGRES_USER: ${GBRAIN_POSTGRES_USER:?set GBRAIN_POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${GBRAIN_POSTGRES_PASSWORD:?set GBRAIN_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${GBRAIN_POSTGRES_DB:?set GBRAIN_POSTGRES_DB in .env}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./scripts/db-init.sql:/docker-entrypoint-initdb.d/001-db-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # One-shot bootstrap container. Expected steady state after a successful stack
+  # start: Exited(0). Other GBrain services wait for this completion.
+  gbrain-init:
+    <<: *gbrain-service
+    container_name: gbrain-init
+    environment:
+      <<: *gbrain-env
+      GBRAIN_SCHEMA_PACK: ${GBRAIN_SCHEMA_PACK:-gbrain-base-v2}
+      GBRAIN_INIT_NO_EMBEDDING: ${GBRAIN_INIT_NO_EMBEDDING:-0}
+      GBRAIN_INIT_EMBEDDING_MODEL: ${GBRAIN_INIT_EMBEDDING_MODEL:-openai:text-embedding-3-large}
+      GBRAIN_INIT_EMBEDDING_DIMENSIONS: ${GBRAIN_INIT_EMBEDDING_DIMENSIONS:-1536}
+      GBRAIN_INIT_SKIP_EMBED_CHECK: ${GBRAIN_INIT_SKIP_EMBED_CHECK:-0}
+    entrypoint: ["/usr/bin/tini", "--", "/usr/local/bin/init.sh"]
+    restart: "no"
+
+  gbrain-serve:
+    <<: *gbrain-service
+    container_name: gbrain-serve
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *gbrain-env
+      GBRAIN_ROLE: serve
+      GBRAIN_PORT: ${GBRAIN_PORT:-3131}
+      GBRAIN_BIND: ${GBRAIN_BIND:-0.0.0.0}
+      GBRAIN_PUBLIC_URL: ${GBRAIN_PUBLIC_URL:?set GBRAIN_PUBLIC_URL in .env}
+      GBRAIN_ADMIN_BOOTSTRAP_TOKEN: ${GBRAIN_ADMIN_BOOTSTRAP_TOKEN:?set GBRAIN_ADMIN_BOOTSTRAP_TOKEN in .env}
+      GBRAIN_HTTP_CORS_ORIGIN: ${GBRAIN_HTTP_CORS_ORIGIN:-}
+      GBRAIN_TOKEN_TTL: ${GBRAIN_TOKEN_TTL:-3600}
+    ports:
+      - "${GBRAIN_PORT:-3131}:${GBRAIN_PORT:-3131}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bun -e "fetch('http://127.0.0.1:' + (process.env.GBRAIN_PORT || '3131') + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  gbrain-worker:
+    <<: *gbrain-service
+    container_name: gbrain-worker
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *gbrain-env
+      GBRAIN_ROLE: worker
+      GBRAIN_WORKER_QUEUE: ${GBRAIN_WORKER_QUEUE:-default}
+      GBRAIN_WORKER_CONCURRENCY: ${GBRAIN_WORKER_CONCURRENCY:-2}
+      GBRAIN_WORKER_MAX_RSS_MB: ${GBRAIN_WORKER_MAX_RSS_MB:-0}
+
+  gbrain-autopilot:
+    <<: *gbrain-service
+    container_name: gbrain-autopilot
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *gbrain-env
+      GBRAIN_ROLE: autopilot
+      GBRAIN_REPO: /data/brain
+      GBRAIN_AUTOPILOT_INTERVAL: ${GBRAIN_AUTOPILOT_INTERVAL:-300}
+
+  # Optional. Disabled by default because it grants EVERY OAuth client read
+  # access to EVERY current source. Enable only for a fully shared team brain:
+  #   docker compose --profile federation up -d gbrain-federation
+  gbrain-federation:
+    <<: *gbrain-service
+    profiles: ["federation"]
+    container_name: gbrain-federation
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *gbrain-env
+      GBRAIN_FEDERATION_INTERVAL: ${GBRAIN_FEDERATION_INTERVAL:-60}
+    entrypoint: ["/usr/bin/tini", "--", "/usr/local/bin/grant-federation.sh"]
+
+

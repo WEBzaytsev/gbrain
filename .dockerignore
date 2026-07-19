@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+brain-repo
+data
+backups
+*.sql
+*.dump
+*.tgz
+*.tar
+*.tar.gz
