@@ -12,6 +12,7 @@ WEBzaytsev-gbrain/
 ├── data/           # служебное runtime-состояние GBrain: /home/gbrain, .gbrain и т. п.
 ├── postgres/       # данные Postgres
 ├── data/scripts/  # tracked helper-скрипты образа и entrypoint
+├── skills/         # GBrain skillpack, копируется в runtime image
 ├── compose.yaml    # runtime Compose stack
 ├── Dockerfile      # сборка кастомного образа
 └── .env.example    # шаблон переменных окружения
@@ -31,6 +32,7 @@ WEBzaytsev-gbrain/
 | Путь | Git | Docker build context | Назначение |
 |---|---:|---:|---|
 | `brain/` | да | нет | пользовательские Markdown/source-файлы |
+| `skills/` | да | да | GBrain MCP skillpack для `list_skills` / `get_skill` |
 | `data/` без `data/scripts/` | нет | нет | runtime-состояние GBrain |
 | `postgres/` | нет | нет | данные Postgres |
 | `data/scripts/` | да | да | entrypoint/init/federation helpers |
@@ -271,6 +273,8 @@ docker build \
 Dockerfile:
 
 - ставит `gbrain` через Bun из `github:garrytan/gbrain`;
+- копирует tracked `skills/` в `/usr/local/share/gbrain/skills`;
+- задаёт `GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills`, чтобы MCP `list_skills` / `get_skill` работали из `hub.zaitsv.dev/gbrain` без ручной настройки;
 - применяет patch admin UI из `data/scripts/patch-gbrain-admin-ui.py`;
 - создаёт пользователя `gbrain` с UID `10001`;
 - копирует entrypoint/init/federation scripts из `data/scripts/`;
@@ -291,6 +295,7 @@ Pipeline запускается на `push` в `main/master`, если меня�
 
 - `Dockerfile`;
 - `compose.yaml`;
+- `skills/**`;
 - `data/scripts/**`;
 - `.dockerignore`;
 - `README.md`;
@@ -302,6 +307,8 @@ Pipeline запускается на `push` в `main/master`, если меня�
 bash -n data/scripts/entrypoint.sh data/scripts/init.sh data/scripts/grant-federation.sh
 python3 -m py_compile data/scripts/patch-gbrain-admin-ui.py
 docker compose --env-file .env.example config --quiet
+test -f skills/RESOLVER.md
+find skills -name SKILL.md | grep -q .
 ```
 
 Проверить, что Compose рендерит нужные mounts:

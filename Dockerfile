@@ -22,10 +22,12 @@ FROM debian:bookworm-slim
 ARG GIT_COMMIT_SHA=unknown
 
 COPY --from=gbrain-build /usr/local /usr/local
+COPY skills /usr/local/share/gbrain/skills
 
 ENV BUN_INSTALL=/usr/local
 ENV PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
+ENV GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \

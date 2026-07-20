@@ -5,6 +5,7 @@ when:
       include:
         - Dockerfile
         - compose.yaml
+        - skills/**
         - data/scripts/**
         - .dockerignore
         - README.md
