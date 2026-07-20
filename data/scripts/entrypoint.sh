@@ -62,6 +62,9 @@ case "$mode" in
   federation)
     cmd=(/usr/local/bin/grant-federation.sh "$@")
     ;;
+  harden)
+    cmd=(/usr/local/bin/harden-brain-repo.sh "$@")
+    ;;
   *)
     cmd=("$mode" "$@")
     ;;

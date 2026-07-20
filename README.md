@@ -49,8 +49,7 @@ WEBzaytsev-gbrain/
 | `gbrain-init` | `gbrain-init` | `init` | первичная настройка GBrain и регистрация local sources |
 | `gbrain` | `gbrain` | default `serve` | HTTP API/admin UI |
 | `gbrain-worker` | `gbrain-worker` | `worker` | обработка jobs |
-| `gbrain-autopilot` | `gbrain-autopilot` | `autopilot` | периодическая работа GBrain с `/home/gbrain/brain` |
-| `gbrain-md-autopush` | `gbrain-md-autopush` | `md-autopush.sh` | commit/pull/push `/home/gbrain/brain` в GitHub через env credentials |
+| `gbrain-autopilot` | `gbrain-autopilot` | `autopilot` | периодическая работа с `/home/gbrain/brain` |
 | `gbrain-federation` | `gbrain-federation` | `federation` | выдаёт OAuth-клиентам доступ ко всем sources |
 
 Образ для GBrain-сервисов:
@@ -193,30 +192,13 @@ chown -R 10001:10001 brain data
 | `GBRAIN_WORKER_QUEUE` | worker queue, default `default` |
 | `GBRAIN_WORKER_CONCURRENCY` | worker concurrency, default `2` |
 | `GBRAIN_WORKER_MAX_RSS_MB` | worker memory guard, `0` выключает лимит |
-| `GBRAIN_AUTOPILOT_INTERVAL` | GBrain maintenance autopilot interval, seconds |
-| `GBRAIN_MD_AUTOPUSH_INTERVAL` | markdown Git auto-push interval, seconds |
-| `GBRAIN_MD_GIT_REMOTE_URL` | Git remote for `brain/`, default `https://github.com/WEBzaytsev/gbrain-md.git` |
-| `GBRAIN_MD_GIT_BRANCH` | Git branch for markdown push, default `main` |
-| `GBRAIN_MD_GIT_USERNAME` | Git HTTPS username, default `x-access-token` |
-| `GBRAIN_MD_GIT_TOKEN` | GitHub token/PAT for push; secret, keep only in real `.env` |
+| `GBRAIN_REPO` | путь к markdown repo внутри контейнера, default `/home/gbrain/brain` |
+| `GBRAIN_AUTOPILOT_INTERVAL` | autopilot interval, seconds |
 | `GBRAIN_FEDERATION_INTERVAL` | federation sync interval, seconds |
-
-## Markdown auto-push
-
-`gbrain-md-autopush` is separate from `gbrain-autopilot`: autopilot maintains the GBrain index/cycle; the sidecar publishes Markdown changes from `brain/` to GitHub.
-
-To enable push, put credentials only in the ignored live `.env`:
-
-```env
-GBRAIN_MD_GIT_REMOTE_URL=https://github.com/WEBzaytsev/gbrain-md.git
-GBRAIN_MD_GIT_BRANCH=main
-GBRAIN_MD_GIT_USERNAME=x-access-token
-GBRAIN_MD_GIT_TOKEN=
-```
-
-The sidecar uses `GIT_ASKPASS`, commits safe changed paths, pulls with `--rebase --autostash`, and pushes to the configured branch. If `GBRAIN_MD_GIT_TOKEN` is empty, it stays idle and logs a skip line.
-
-It refuses to commit sensitive-looking paths such as `.env`, `*secret*`, `*credential*`, `*token*`, private keys, and PEM/KEY/P12/PFX files.
+| `GBRAIN_DURABILITY_SOURCE` | source id для native harden, default `default` |
+| `GBRAIN_DURABILITY_BRANCH` | Git branch для native harden, default `main` |
+| `GBRAIN_DURABILITY_INSTALL_CRON` | `0` в Docker: crontab внутри one-shot контейнера не является durable scheduler |
+| `GBRAIN_GITHUB_PAT` | PAT для `gbrain sources harden`; хранить только в `.env` / secret env |
 
 ## Init flow
 
@@ -233,6 +215,32 @@ It refuses to commit sensitive-looking paths such as `.env`, `*secret*`, `*crede
 ```bash
 docker compose --env-file .env up gbrain-init
 ```
+
+## Native Git durability / auto-push
+
+В GBrain уже есть родной механизм публикации brain repo: `gbrain sources harden`. Отдельный `git push` sidecar не нужен.
+
+Для текущего Docker layout используется one-shot command `harden`: он сначала привязывает `default` source к mounted repo, затем запускает native `gbrain sources harden`. PAT задаётся через `.env` / environment, не через CLI argument:
+
+```bash
+docker compose --env-file .env run --rm gbrain harden
+```
+
+Если `GBRAIN_GITHUB_PAT` пустой, команда только привяжет source и завершится с кодом `2`, не оставляя credential wiring наполовину.
+
+Что ставит GBrain: repo-local credential wiring, локальный untracked `post-commit` hook, committed `scripts/brain-commit-push.sh`, durability rules в `AGENTS.md`/`RESOLVER.md`, 30-минутный DB-free pull cron и push-probe.
+
+Для проверки без вывода секрета:
+
+```bash
+docker compose --env-file .env exec -T gbrain \
+  gbrain sources list --json
+
+test -x brain/scripts/brain-commit-push.sh
+test -x brain/.git/hooks/post-commit
+```
+
+`GBRAIN_GITHUB_PAT` хранить только в реальном `.env` или внешнем secret env; не коммитить и не вставлять в URL remote.
 
 ## Управление stack
 
@@ -300,7 +308,7 @@ Dockerfile:
 - задаёт `GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills`, чтобы MCP `list_skills` / `get_skill` работали из `hub.zaitsv.dev/gbrain` без ручной настройки;
 - применяет patch admin UI из `data/scripts/patch-gbrain-admin-ui.py`;
 - создаёт пользователя `gbrain` с UID `10001`;
-- копирует entrypoint/init/federation scripts из `data/scripts/`;
+- копирует entrypoint/init/federation/durability scripts из `data/scripts/`;
 - работает из `/home/gbrain/brain`.
 
 `brain/`, runtime-файлы из `data/`, `postgres/`, `.env` и backup-файлы исключены из Docker build context. В build context оставлены только tracked helper-файлы `data/scripts/**`.
