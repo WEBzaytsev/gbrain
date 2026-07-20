@@ -5,7 +5,7 @@ when:
       include:
         - Dockerfile
         - compose.yaml
-        - scripts/**
+        - data/scripts/**
         - .dockerignore
         - README.md
         - .woodpecker/gbrain.yml

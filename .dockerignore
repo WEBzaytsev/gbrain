@@ -2,10 +2,14 @@
 .env
 .env.*
 !.env.example
-data
+data/*
+!data/scripts/
+!data/scripts/**
+brain
 postgres
 backups
 *.sql
+!data/scripts/db-init.sql
 *.dump
 *.tgz
 *.tar

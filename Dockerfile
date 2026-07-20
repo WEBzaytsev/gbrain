@@ -11,7 +11,10 @@ COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 ENV BUN_INSTALL=/usr/local
 ENV PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+COPY data/scripts/patch-gbrain-admin-ui.py /tmp/patch-gbrain-admin-ui.py
+
 RUN bun install -g "github:garrytan/gbrain#${GBRAIN_REF}" \
+ && python3 /tmp/patch-gbrain-admin-ui.py \
  && gbrain --version
 
 FROM debian:bookworm-slim
@@ -42,9 +45,9 @@ RUN mkdir -p /home/gbrain/.gbrain /home/gbrain/brain \
 
 VOLUME ["/home/gbrain"]
 
-COPY --chmod=755 scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=755 scripts/init.sh /usr/local/bin/init.sh
-COPY --chmod=755 scripts/grant-federation.sh /usr/local/bin/grant-federation.sh
+COPY --chmod=755 data/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 data/scripts/init.sh /usr/local/bin/init.sh
+COPY --chmod=755 data/scripts/grant-federation.sh /usr/local/bin/grant-federation.sh
 
 WORKDIR /home/gbrain/brain
 
