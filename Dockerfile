@@ -4,7 +4,7 @@ FROM oven/bun:1.3.10 AS bun
 
 FROM node:22-bookworm AS gbrain-build
 
-ARG GBRAIN_REF=eefe8b5741c27e59bf65198d46e3dfe5bfa70ce9
+ARG GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 
