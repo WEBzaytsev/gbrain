@@ -50,6 +50,7 @@ VOLUME ["/home/gbrain"]
 COPY --chmod=755 data/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=755 data/scripts/init.sh /usr/local/bin/init.sh
 COPY --chmod=755 data/scripts/grant-federation.sh /usr/local/bin/grant-federation.sh
+COPY --chmod=755 data/scripts/md-autopush.sh /usr/local/bin/md-autopush.sh
 
 WORKDIR /home/gbrain/brain
 

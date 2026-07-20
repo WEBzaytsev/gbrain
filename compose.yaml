@@ -149,6 +149,35 @@ services:
     security_opt:
       - no-new-privileges:true
 
+
+  gbrain-md-autopush:
+    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    container_name: gbrain-md-autopush
+    environment:
+      DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
+      GBRAIN_SKIP_STARTUP_HOOKS: "1"
+      GBRAIN_MD_AUTOPUSH_REPO: ${GBRAIN_MD_AUTOPUSH_REPO:-/home/gbrain/brain}
+      GBRAIN_MD_AUTOPUSH_INTERVAL: ${GBRAIN_MD_AUTOPUSH_INTERVAL:-300}
+      GBRAIN_MD_GIT_REMOTE_URL: ${GBRAIN_MD_GIT_REMOTE_URL:-https://github.com/WEBzaytsev/gbrain-md.git}
+      GBRAIN_MD_GIT_BRANCH: ${GBRAIN_MD_GIT_BRANCH:-main}
+      GBRAIN_MD_GIT_USERNAME: ${GBRAIN_MD_GIT_USERNAME:-x-access-token}
+      GBRAIN_MD_GIT_TOKEN: ${GBRAIN_MD_GIT_TOKEN:-}
+      GBRAIN_MD_GIT_AUTHOR_NAME: ${GBRAIN_MD_GIT_AUTHOR_NAME:-GBrain MD Autopush}
+      GBRAIN_MD_GIT_AUTHOR_EMAIL: ${GBRAIN_MD_GIT_AUTHOR_EMAIL:-gbrain-md-autopush@localhost}
+      GBRAIN_MD_AUTOPUSH_COMMIT_PREFIX: "${GBRAIN_MD_AUTOPUSH_COMMIT_PREFIX:-chore(gbrain): autopush brain}"
+    command: /usr/local/bin/md-autopush.sh
+    volumes:
+      - ./data:/home/gbrain
+      - ./brain:/home/gbrain/brain
+    depends_on:
+      gbrain-db:
+        condition: service_healthy
+      gbrain-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
   gbrain-federation:
     image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain-federation

@@ -49,7 +49,8 @@ WEBzaytsev-gbrain/
 | `gbrain-init` | `gbrain-init` | `init` | первичная настройка GBrain и регистрация local sources |
 | `gbrain` | `gbrain` | default `serve` | HTTP API/admin UI |
 | `gbrain-worker` | `gbrain-worker` | `worker` | обработка jobs |
-| `gbrain-autopilot` | `gbrain-autopilot` | `autopilot` | периодическая работа с `/home/gbrain/brain` |
+| `gbrain-autopilot` | `gbrain-autopilot` | `autopilot` | периодическая работа GBrain с `/home/gbrain/brain` |
+| `gbrain-md-autopush` | `gbrain-md-autopush` | `md-autopush.sh` | commit/pull/push `/home/gbrain/brain` в GitHub через env credentials |
 | `gbrain-federation` | `gbrain-federation` | `federation` | выдаёт OAuth-клиентам доступ ко всем sources |
 
 Образ для GBrain-сервисов:
@@ -192,8 +193,30 @@ chown -R 10001:10001 brain data
 | `GBRAIN_WORKER_QUEUE` | worker queue, default `default` |
 | `GBRAIN_WORKER_CONCURRENCY` | worker concurrency, default `2` |
 | `GBRAIN_WORKER_MAX_RSS_MB` | worker memory guard, `0` выключает лимит |
-| `GBRAIN_AUTOPILOT_INTERVAL` | autopilot interval, seconds |
+| `GBRAIN_AUTOPILOT_INTERVAL` | GBrain maintenance autopilot interval, seconds |
+| `GBRAIN_MD_AUTOPUSH_INTERVAL` | markdown Git auto-push interval, seconds |
+| `GBRAIN_MD_GIT_REMOTE_URL` | Git remote for `brain/`, default `https://github.com/WEBzaytsev/gbrain-md.git` |
+| `GBRAIN_MD_GIT_BRANCH` | Git branch for markdown push, default `main` |
+| `GBRAIN_MD_GIT_USERNAME` | Git HTTPS username, default `x-access-token` |
+| `GBRAIN_MD_GIT_TOKEN` | GitHub token/PAT for push; secret, keep only in real `.env` |
 | `GBRAIN_FEDERATION_INTERVAL` | federation sync interval, seconds |
+
+## Markdown auto-push
+
+`gbrain-md-autopush` is separate from `gbrain-autopilot`: autopilot maintains the GBrain index/cycle; the sidecar publishes Markdown changes from `brain/` to GitHub.
+
+To enable push, put credentials only in the ignored live `.env`:
+
+```env
+GBRAIN_MD_GIT_REMOTE_URL=https://github.com/WEBzaytsev/gbrain-md.git
+GBRAIN_MD_GIT_BRANCH=main
+GBRAIN_MD_GIT_USERNAME=x-access-token
+GBRAIN_MD_GIT_TOKEN=
+```
+
+The sidecar uses `GIT_ASKPASS`, commits safe changed paths, pulls with `--rebase --autostash`, and pushes to the configured branch. If `GBRAIN_MD_GIT_TOKEN` is empty, it stays idle and logs a skip line.
+
+It refuses to commit sensitive-looking paths such as `.env`, `*secret*`, `*credential*`, `*token*`, private keys, and PEM/KEY/P12/PFX files.
 
 ## Init flow
 
