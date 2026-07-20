@@ -36,7 +36,7 @@ steps:
       tags:
         - latest
       build_args:
-        GBRAIN_REF: eefe8b5741c27e59bf65198d46e3dfe5bfa70ce9
+        GBRAIN_REF: f72de97943eb9dc1292a80f85d19db7e311855dc
         GIT_COMMIT_SHA: ${CI_COMMIT_SHA}
         BUILDKIT_INLINE_CACHE: "1"
       labels:

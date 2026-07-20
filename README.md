@@ -264,7 +264,7 @@ curl -I http://127.0.0.1:${GBRAIN_PORT:-3131}/admin/login
 
 ```bash
 docker build \
-  --build-arg GBRAIN_REF=eefe8b5741c27e59bf65198d46e3dfe5bfa70ce9 \
+  --build-arg GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc \
   --build-arg GIT_COMMIT_SHA="$(git rev-parse HEAD)" \
   -t hub.zaitsv.dev/gbrain:latest \
   .
