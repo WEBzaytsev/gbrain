@@ -6,6 +6,18 @@ source_id="${GBRAIN_DURABILITY_SOURCE:-default}"
 branch="${GBRAIN_DURABILITY_BRANCH:-main}"
 install_cron="${GBRAIN_DURABILITY_INSTALL_CRON:-0}"
 
+# `docker compose exec` starts ad-hoc commands as the image user (root) because
+# the entrypoint needs root briefly to prepare bind mounts before `gosu gbrain`.
+# If harden runs as root, native GBrain writes a root-owned 0600 credential store
+# under /home/gbrain/.gbrain; later app-triggered hooks run as uid 10001 and
+# cannot read it, so auto-push becomes LOCAL-ONLY. Defensively normalize the
+# mounted state and re-exec as the runtime user before touching Git credentials.
+if [[ "$(id -u)" -eq 0 ]]; then
+  mkdir -p /home/gbrain/.gbrain "$repo"
+  chown -R gbrain:gbrain /home/gbrain/.gbrain "$repo"
+  exec gosu gbrain:gbrain "$0" "$@"
+fi
+
 if [[ ! -d "$repo/.git" ]]; then
   echo "[durability] not a git repo: $repo" >&2
   exit 1

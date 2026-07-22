@@ -228,16 +228,19 @@ docker compose --env-file .env run --rm gbrain harden
 
 Если `GBRAIN_GITHUB_PAT` пустой, команда только привяжет source и завершится с кодом `2`, не оставляя credential wiring наполовину.
 
+Не запускайте native harden напрямую через `docker compose exec gbrain gbrain sources harden ...`: `exec`-команды стартуют как root, а root-owned `0600` credential store ломает последующие app-triggered auto-push от пользователя `gbrain`. Используйте wrapper выше (`run --rm gbrain harden`) или `/usr/local/bin/harden-brain-repo.sh`; он сам сбрасывает root → `gbrain` и нормализует ownership.
+
 Что ставит GBrain: repo-local credential wiring, локальный untracked `post-commit` hook, committed `scripts/brain-commit-push.sh`, durability rules в `AGENTS.md`/`RESOLVER.md`, 30-минутный DB-free pull cron и push-probe.
 
 Для проверки без вывода секрета:
 
 ```bash
-docker compose --env-file .env exec -T gbrain \
+docker compose --env-file .env exec -T --user 10001:10001 gbrain \
   gbrain sources list --json
 
 test -x brain/scripts/brain-commit-push.sh
 test -x brain/.git/hooks/post-commit
+stat -c '%a %u:%g %n' data/.gbrain/git-credentials  # должно быть 600 10001:10001
 ```
 
 `GBRAIN_GITHUB_PAT` хранить только в реальном `.env` или внешнем secret env; не коммитить и не вставлять в URL remote.
