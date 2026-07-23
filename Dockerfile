@@ -2,7 +2,7 @@
 
 FROM oven/bun:1.3.10 AS bun
 
-FROM node:22-bookworm AS gbrain-build
+FROM node:26-bookworm AS gbrain-build
 
 ARG GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc
 
