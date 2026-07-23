@@ -11,8 +11,9 @@ WEBzaytsev-gbrain/
 ├── brain/          # пользовательские Markdown/source-файлы GBrain
 ├── data/           # служебное runtime-состояние GBrain: /home/gbrain, .gbrain и т. п.
 ├── postgres/       # данные Postgres
-├── data/scripts/  # tracked helper-скрипты образа и entrypoint
+├── data/scripts/   # tracked helper-скрипты образа и entrypoint
 ├── skills/         # GBrain skillpack, копируется в runtime image
+├── .github/        # GitHub Actions + Dependabot
 ├── compose.yaml    # runtime Compose stack
 ├── Dockerfile      # сборка кастомного образа
 └── .env.example    # шаблон переменных окружения
@@ -36,6 +37,7 @@ WEBzaytsev-gbrain/
 | `data/` без `data/scripts/` | нет | нет | runtime-состояние GBrain |
 | `postgres/` | нет | нет | данные Postgres |
 | `data/scripts/` | да | да | entrypoint/init/federation helpers |
+| `.github/` | да | нет | GitHub Actions workflow и Dependabot config |
 | `.env` | нет | нет | реальные секреты и настройки |
 | `.env.example` | да | да | безопасный шаблон |
 
@@ -55,7 +57,7 @@ WEBzaytsev-gbrain/
 Образ для GBrain-сервисов:
 
 ```text
-hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
 ```
 
 Postgres:
@@ -300,7 +302,7 @@ curl -I http://127.0.0.1:${GBRAIN_PORT:-3131}/admin/login
 docker build \
   --build-arg GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc \
   --build-arg GIT_COMMIT_SHA="$(git rev-parse HEAD)" \
-  -t hub.zaitsv.dev/gbrain:latest \
+  -t ghcr.io/webzaytsev/gbrain:latest \
   .
 ```
 
@@ -308,7 +310,7 @@ Dockerfile:
 
 - ставит `gbrain` через Bun из `github:garrytan/gbrain`;
 - копирует tracked `skills/` в `/usr/local/share/gbrain/skills`;
-- задаёт `GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills`, чтобы MCP `list_skills` / `get_skill` работали из `hub.zaitsv.dev/gbrain` без ручной настройки;
+- задаёт `GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills`, чтобы MCP `list_skills` / `get_skill` работали из `ghcr.io/webzaytsev/gbrain` без ручной настройки;
 - применяет patch admin UI из `data/scripts/patch-gbrain-admin-ui.py`;
 - создаёт пользователя `gbrain` с UID `10001`;
 - копирует entrypoint/init/federation/durability scripts из `data/scripts/`;
@@ -318,22 +320,21 @@ Dockerfile:
 
 ## CI
 
-Woodpecker pipeline build-only:
+GitHub Actions workflow `.github/workflows/docker-image.yml`:
 
-- собирает `linux/amd64` image;
-- пушит `hub.zaitsv.dev/gbrain:latest`;
-- ставит OCI label `org.opencontainers.image.revision=${CI_COMMIT_SHA}`;
-- использует registry cache `hub.zaitsv.dev/gbrain:buildcache`.
+- проверяет shell-скрипты, Python helper, Compose render, обязательные файлы skillpack и секретоподобные литералы;
+- собирает `linux/amd64` Docker image на PR без публикации;
+- публикует image в GitHub Container Registry на default branch, version tags или manual dispatch с `push_image=true`;
+- ставит tags `latest` для default branch, `sha-<commit>`, branch refs и semver tags;
+- использует GitHub Actions cache (`type=gha`), без внешнего registry cache.
 
-Pipeline запускается на `push` в `main/master`, если менялись:
+Публикуемый image:
 
-- `Dockerfile`;
-- `compose.yaml`;
-- `skills/**`;
-- `data/scripts/**`;
-- `.dockerignore`;
-- `README.md`;
-- `.woodpecker/gbrain.yml`.
+```text
+ghcr.io/webzaytsev/gbrain:latest
+```
+
+Внешние registry credentials не нужны: GitHub Actions пушит через `GITHUB_TOKEN` и permission `packages: write`.
 
 ## Проверки перед push
 

@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   gbrain-init:
-    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain-init
     environment:
       DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
@@ -49,7 +49,7 @@ services:
       - no-new-privileges:true
 
   gbrain:
-    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain
     environment:
       DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
@@ -98,7 +98,7 @@ services:
       - no-new-privileges:true
 
   gbrain-worker:
-    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain-worker
     environment:
       DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
@@ -127,7 +127,7 @@ services:
       - no-new-privileges:true
 
   gbrain-autopilot:
-    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain-autopilot
     environment:
       DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}
@@ -155,7 +155,7 @@ services:
       - no-new-privileges:true
 
   gbrain-federation:
-    image: hub.zaitsv.dev/gbrain:${IMAGE_TAG:-latest}
+    image: ghcr.io/webzaytsev/gbrain:${IMAGE_TAG:-latest}
     container_name: gbrain-federation
     environment:
       DATABASE_URL: ${GBRAIN_DATABASE_URL:-postgresql://gbrain:change-me-long-random-password@gbrain-db:5432/gbrain}

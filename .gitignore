@@ -13,5 +13,7 @@ backups/
 *.tgz
 *.tar
 *.tar.gz
+__pycache__/
+*.py[cod]
 
 .DS_Store

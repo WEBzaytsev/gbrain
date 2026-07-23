@@ -8,6 +8,8 @@ data/*
 brain
 postgres
 backups
+.github
+README.md
 *.sql
 !data/scripts/db-init.sql
 *.dump
