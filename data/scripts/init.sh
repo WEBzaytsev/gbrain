@@ -39,24 +39,9 @@ apply_migrations() {
   gbrain apply-migrations --yes --no-autopilot-install
 }
 
-register_local_sources() {
-  shopt -s nullglob
-  for d in /home/gbrain/brain/*/; do
-    [[ -d "$d" ]] || continue
-    id="$(basename "$d")"
-    if [[ "$id" == .* ]]; then
-      echo "[init] skip hidden source directory: $id"
-      continue
-    fi
-    echo "[init] registering local source: $id -> $d"
-    gbrain sources add "$id" --path "$d" --name "$id" --federated || true
-  done
-}
-
 wait_for_postgres
 run_init_if_needed
 apply_migrations
-register_local_sources
 
 gbrain sources list || true
 echo "[init] done"

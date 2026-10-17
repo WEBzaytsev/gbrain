@@ -48,7 +48,7 @@ WEBzaytsev-gbrain/
 | Service | Container | Команда | Роль |
 |---|---|---|---|
 | `gbrain-db` | `gbrain-db` | Postgres | база данных с pgvector |
-| `gbrain-init` | `gbrain-init` | `init` | первичная настройка GBrain и регистрация local sources |
+| `gbrain-init` | `gbrain-init` | `init` | первичная настройка GBrain и миграции базы данных |
 | `gbrain` | `gbrain` | default `serve` | HTTP API/admin UI |
 | `gbrain-worker` | `gbrain-worker` | `worker` | обработка jobs |
 | `gbrain-autopilot` | `gbrain-autopilot` | `autopilot` | периодическая работа с `/home/gbrain/brain` |
@@ -122,15 +122,10 @@ brain/notes/
 brain/inbox/
 ```
 
-При `gbrain-init` каждая не скрытая подпапка первого уровня в `/home/gbrain/brain` регистрируется как local source:
-
-```text
-brain/projects/ -> source id: projects
-brain/notes/    -> source id: notes
-brain/inbox/    -> source id: inbox
-```
-
-Скрытые директории вида `.something/` пропускаются.
+`gbrain init` регистрирует `/home/gbrain/brain` как единый source `default`.
+Подпапки `brain/projects/`, `brain/notes/` и другие остаются частью этого source;
+повторно регистрировать вложенные пути нельзя, потому что GBrain запрещает
+пересекающиеся source roots.
 
 Если файлы копируются на сервер вручную, проверьте владельца:
 
@@ -209,9 +204,9 @@ chown -R 10001:10001 brain data
 1. ждёт Postgres;
 2. запускает `gbrain init`, если `/home/gbrain/.gbrain/config.json` ещё нет;
 3. применяет ожидающие миграции через `gbrain apply-migrations --yes --no-autopilot-install`;
-4. регистрирует подпапки из `/home/gbrain/brain` как federated local sources.
 
-Повторный запуск безопасен: если config уже есть, init пропускается, но source registration всё равно проверяется.
+Повторный запуск безопасен: если config уже есть, init пропускается, а миграции
+применяются идемпотентно.
 
 Запустить init отдельно:
 
