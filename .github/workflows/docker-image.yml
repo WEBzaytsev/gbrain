@@ -37,7 +37,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: webzaytsev/gbrain
-  GBRAIN_REF: f72de97943eb9dc1292a80f85d19db7e311855dc
+  GBRAIN_REF: 2d33b41b6281d07fbc57cd4472aceb1058b874ec
 
 permissions:
   contents: read

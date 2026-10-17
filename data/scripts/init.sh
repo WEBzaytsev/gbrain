@@ -34,6 +34,11 @@ run_init_if_needed() {
   "${cmd[@]}"
 }
 
+apply_migrations() {
+  echo "[init] applying pending migrations"
+  gbrain apply-migrations --yes --no-autopilot-install
+}
+
 register_local_sources() {
   shopt -s nullglob
   for d in /home/gbrain/brain/*/; do
@@ -50,6 +55,7 @@ register_local_sources() {
 
 wait_for_postgres
 run_init_if_needed
+apply_migrations
 register_local_sources
 
 gbrain sources list || true

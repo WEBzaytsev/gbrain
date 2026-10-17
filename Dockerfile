@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1.3.14 AS bun
+FROM oven/bun:1.4.3 AS bun
 
 FROM node:22-bookworm AS gbrain-build
 
-ARG GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc
+ARG GBRAIN_REF=2d33b41b6281d07fbc57cd4472aceb1058b874ec
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 

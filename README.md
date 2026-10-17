@@ -208,7 +208,8 @@ chown -R 10001:10001 brain data
 
 1. ждёт Postgres;
 2. запускает `gbrain init`, если `/home/gbrain/.gbrain/config.json` ещё нет;
-3. регистрирует подпапки из `/home/gbrain/brain` как federated local sources.
+3. применяет ожидающие миграции через `gbrain apply-migrations --yes --no-autopilot-install`;
+4. регистрирует подпапки из `/home/gbrain/brain` как federated local sources.
 
 Повторный запуск безопасен: если config уже есть, init пропускается, но source registration всё равно проверяется.
 
@@ -300,7 +301,7 @@ curl -I http://127.0.0.1:${GBRAIN_PORT:-3131}/admin/login
 
 ```bash
 docker build \
-  --build-arg GBRAIN_REF=f72de97943eb9dc1292a80f85d19db7e311855dc \
+  --build-arg GBRAIN_REF=2d33b41b6281d07fbc57cd4472aceb1058b874ec \
   --build-arg GIT_COMMIT_SHA="$(git rev-parse HEAD)" \
   -t ghcr.io/webzaytsev/gbrain:latest \
   .
@@ -311,7 +312,7 @@ Dockerfile:
 - ставит `gbrain` через Bun из `github:garrytan/gbrain`;
 - копирует tracked `skills/` в `/usr/local/share/gbrain/skills`;
 - задаёт `GBRAIN_SKILLS_DIR=/usr/local/share/gbrain/skills`, чтобы MCP `list_skills` / `get_skill` работали из `ghcr.io/webzaytsev/gbrain` без ручной настройки;
-- применяет patch admin UI из `data/scripts/patch-gbrain-admin-ui.py`;
+- использует встроенный admin UI upstream и сохраняет локальный SPA fallback для `GET /admin/login`;
 - создаёт пользователя `gbrain` с UID `10001`;
 - копирует entrypoint/init/federation/durability scripts из `data/scripts/`;
 - работает из `/home/gbrain/brain`.
@@ -341,7 +342,7 @@ ghcr.io/webzaytsev/gbrain:latest
 ## Проверки перед push
 
 ```bash
-bash -n data/scripts/entrypoint.sh data/scripts/init.sh data/scripts/grant-federation.sh
+bash -n data/scripts/entrypoint.sh data/scripts/init.sh data/scripts/grant-federation.sh data/scripts/harden-brain-repo.sh
 python3 -m py_compile data/scripts/patch-gbrain-admin-ui.py
 docker compose --env-file .env.example config --quiet
 test -f skills/RESOLVER.md
